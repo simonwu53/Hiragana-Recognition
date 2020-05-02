@@ -45,9 +45,8 @@ class TrainDataset(Dataset):
         :param idx: int, an index to specify which image to load.
         :return: pre-processed image and one-hot label
         """
-        # transform to one-hot label
-        label = np.zeros((self.ci.shape[0],), dtype=np.float32)
-        label[self.labels[idx]] = 1
+        # get label class
+        label = self.labels[idx]
 
         # normalize training image, TODO: add more preprocessing techniques later
         image = self.images[idx].reshape(50, 50)  # shape (H, W)

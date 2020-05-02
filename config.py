@@ -13,3 +13,7 @@ dropLast = True
 numWorkers = 4
 pinMem = True
 timeOut = 5
+
+# ---train details---
+Epochs = 10
+TBUpdate = 100  # tensorboard update interval
