@@ -51,6 +51,7 @@ class TrainDataset(Dataset):
 
         # normalize training image, TODO: add more preprocessing techniques later
         image = self.images[idx].reshape(50, 50)  # shape (H, W)
+        image = image / 255.0  # to range [0, 1]
         image = self.transform(image)
 
         return image, label
@@ -62,7 +63,7 @@ class TrainDataset(Dataset):
         """
         return Compose([
             ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
-            Normalize(mean=(TRAINSET_MEAN,), std=(TRAINSET_STD,))  # normalize image
+            Normalize(mean=(TRAINSET_MEAN,), std=(TRAINSET_STD,))  # normalize image to [-1, 1]
         ])
 
     def label_to_classes(self):

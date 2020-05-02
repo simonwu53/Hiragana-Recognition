@@ -1,6 +1,6 @@
 # ---training set statistics---
-TRAINSET_MEAN = 23.8014
-TRAINSET_STD = 45.9789
+TRAINSET_MEAN = 0.0933
+TRAINSET_STD = 0.1803
 
 # ---optimizer---
 LR = 1e-3  # learning rate
