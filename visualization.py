@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 
-def grid_plot(img_list, nrows=5, labels=None, show=True):
+def grid_plot(img_list, nrows=5, labels=None, cmap='gray', show=True):
     """
     show images in grid view
 
@@ -10,6 +10,7 @@ def grid_plot(img_list, nrows=5, labels=None, show=True):
     :param nrows: int, number of plots per row, default=5
     :param labels: Optional[List[str,...]], None or a list of labels that has the same length as img_list,
                                             each label is a string.
+    :param cmap: str, plotting color map, default 'gray'
     :param show: bool, whether to show the grid plots
     :return: -
     """
@@ -21,7 +22,7 @@ def grid_plot(img_list, nrows=5, labels=None, show=True):
                      )
 
     for i, ax in enumerate(grid):
-        ax.imshow(img_list[i])
+        ax.imshow(img_list[i], cmap=cmap)
         ax.set_title(labels[i])
         ax.set_xticks([])
         ax.set_yticks([])
