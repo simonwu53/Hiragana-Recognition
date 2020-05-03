@@ -1,19 +1,35 @@
 # training dataset implement here
-from torch.utils.data import IterableDataset, Dataset
+from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Normalize, ToTensor
+from sklearn.model_selection import train_test_split
 import numpy as np
+import logging
 from visualization import grid_plot
 from config import *
 
 
+# Set logging
+FORMAT = '[%(asctime)s [%(name)s][%(levelname)s]: %(message)s'
+logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+LOG = logging.getLogger('Dataset')
+
+
 class TrainDataset(Dataset):
-    def __init__(self, data_path='./dataset/data.npz'):
+    def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train'):
         """
         This is the class for training dataset used by PyTorch DataLoader.
         Dataset depicts the logic of how to access each (image, label) pair.
         DataLoader depicts the logic of loading data during the training (batch size, shuffle, etc)
 
         :param data_path: str, the path to the dataset. Default to the local "./dataset" folder.
+        :param test_size: float or int, If float, should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+                                        If int, represents the absolute number of test samples.
+        :param train_size: float or int,If float, should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+                                        If int, represents the absolute number of train samples.
+                                        If None, the value is automatically set to the complement of the test size.
+        :param mode: str, 'train' or 'test', based on the mode, the dataset will produce different samples,
+                                             before using the instance, use 'set_mode' function to set instance behavior
+                                             you can not change mode during iterating the dataset.
         """
         # load file
         file = np.load(data_path)
@@ -24,12 +40,17 @@ class TrainDataset(Dataset):
 
         # attributes
         self.c2l = None  # store class->label name lookup, e.g. {1:'a', 2:'ba'...}
-        self.len = self.images.shape[0]  # dataset volume
         self.ci, self.cc = np.unique(self.labels, return_counts=True)  # classes statistics: unique labels, class count
         self.transform = self.compose_transform()  # a set of defined preprocessing techniques for the image
+        self.trainset = {'image': None, 'label': None}  # training set after splitting
+        self.testset = {'image': None, 'label': None}  # testing set after splitting
+        self.mode = mode
 
         # preprocessing
         self.label_to_classes()
+        self.train_test_split(test_size, train_size)
+        self.train_len = self.trainset['image'].shape[0]  # training set size
+        self.test_len = self.testset['image'].shape[0]  # testing set size
         return
 
     def __len__(self):
@@ -37,7 +58,13 @@ class TrainDataset(Dataset):
         Used by PyTorch DataLoader to know how many training data we have
         :return: total images number
         """
-        return self.len
+        if self.mode == 'train':
+            return self.train_len
+        elif self.mode == 'test':
+            return self.test_len
+        else:
+            LOG.error("Unknown mode %s found." % self.mode)
+            raise ValueError("Unknown mode %s found." % self.mode)
 
     def __getitem__(self, idx):
         """
@@ -45,11 +72,25 @@ class TrainDataset(Dataset):
         :param idx: int, an index to specify which image to load.
         :return: pre-processed image and one-hot label
         """
-        # get label class
-        label = self.labels[idx]
+        # decide which data to use based on the mode
+        if self.mode == 'train':
+            dataset = self.trainset
+        elif self.mode == 'test':
+            dataset = self.testset
+        else:
+            LOG.error("Unknown mode %s found." % self.mode)
+            raise ValueError("Unknown mode %s found." % self.mode)
 
-        # normalize training image, TODO: add more preprocessing techniques later
-        image = self.images[idx].reshape(50, 50)  # shape (H, W)
+        # get label class
+        label = dataset['label'][idx]
+
+        # get training image and reshape
+        image = dataset['image'][idx].reshape(50, 50)  # shape (H, W)
+
+        # TODO: add more preprocessing techniques later here
+        # ...
+
+        # rescale to range [0, 1] then normalize to [-1, 1]
         image = image / 255.0  # to range [0, 1]
         image = self.transform(image)
 
@@ -82,6 +123,17 @@ class TrainDataset(Dataset):
 
         self.labels = np.array(list(map(lambda x: l2c[x.decode('utf-8')], self.labels)))
         self.c2l = c2l
+        return
+
+    def train_test_split(self, test_size, train_size):
+        # split training & testing data, splitting is performed on each class (each class has almost the same volume)
+        self.trainset['image'], self.testset['image'], self.trainset['label'], self.testset['label'] = \
+            train_test_split(self.images, self.labels, test_size=test_size, train_size=train_size,
+                             stratify=self.labels, random_state=SEED)
+        return
+
+    def set_mode(self, mode):
+        self.mode = mode
         return
 
     def show_random_example(self):
