@@ -128,8 +128,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# PyCharm IDE
 .idea/
 
-dataset/data.npz
+# checkpoint files
+*.tar
 
+# dataset files
+dataset/data.npz
 dataset/data_preprocessed.npz

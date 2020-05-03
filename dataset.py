@@ -126,14 +126,31 @@ class TrainDataset(Dataset):
         return
 
     def train_test_split(self, test_size, train_size):
-        # split training & testing data, splitting is performed on each class (each class has almost the same volume)
+        """
+        split training & testing data, splitting is performed on each class (each class has almost the same volume)
+        :param test_size: float or int, see doc in the __init__ func.
+        :param train_size: float or int, see doc in the __init__ func.
+        :return: -
+        """
         self.trainset['image'], self.testset['image'], self.trainset['label'], self.testset['label'] = \
             train_test_split(self.images, self.labels, test_size=test_size, train_size=train_size,
                              stratify=self.labels, random_state=SEED)
         return
 
-    def set_mode(self, mode):
-        self.mode = mode
+    def train(self):
+        """
+        change dataset behavior to training mode
+        :return: -
+        """
+        self.mode = 'train'
+        return
+
+    def eval(self):
+        """
+        change dataset behavior to testing mode
+        :return: -
+        """
+        self.mode = 'test'
         return
 
     def show_random_example(self):
