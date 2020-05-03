@@ -1,5 +1,12 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
+import logging
+
+
+# Set logging
+FORMAT = '[%(asctime)s [%(name)s][%(levelname)s]: %(message)s'
+logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+LOG = logging.getLogger('Visualization')
 
 
 def grid_plot(img_list, nrows=5, labels=None, cmap='gray', show=True):

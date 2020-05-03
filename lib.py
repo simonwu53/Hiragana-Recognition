@@ -1,9 +1,23 @@
 import numpy as np
 import torch
 from tqdm import tqdm
+import logging
+
+
+# Set logging
+FORMAT = '[%(asctime)s [%(name)s][%(levelname)s]: %(message)s'
+logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+LOG = logging.getLogger('Lib')
 
 
 def train_dataset_statistics(dataset, img_shape=(50, 50)):
+    """
+    Calculate the training data set statistics (mean and std.)
+    :param dataset: dataset instance
+    :param img_shape: image shape for the model input
+    :return: (mean, std.) values
+    """
+    dataset.train()  # set to training mode
     # create data loader
     loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0,
                                          pin_memory=True, drop_last=False)

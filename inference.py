@@ -26,6 +26,12 @@ LOG = logging.getLogger('Train')
 
 
 def train(args):
+    """
+    Training process main function
+
+    :param args: args from command line inputs
+    :return: -
+    """
     # create training directory
     save_root = os.path.join('./results', datetime.now().strftime("%H%M_%d%m%Y"))
     if os.path.exists(save_root):
@@ -130,6 +136,14 @@ def test(args):
 
 
 def loss_batch(logits, gt, func, opt=None):
+    """
+    calculate the losses from the model's output and the ground truth
+    :param logits: model output, must be compatible with ground truth and loss function
+    :param gt: ground truth, must be compatible with logits and loss function
+    :param func: loss function, must be compatible with logits and ground truth
+    :param opt: optimizer instance
+    :return: loss value
+    """
     loss = func(logits, gt)
 
     if opt is not None:
@@ -143,6 +157,11 @@ def loss_batch(logits, gt, func, opt=None):
 
 
 def select_model(args):
+    """
+    return the corresponding model based on the command line args
+    :param args: command line args
+    :return:
+    """
     if args.vgg:
         return models.vgg16()
     elif args.inception:
