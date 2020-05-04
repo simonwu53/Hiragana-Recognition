@@ -97,6 +97,9 @@ class TrainDataset(Dataset):
         # convert to RGB if needed
         if self.color:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)  # shape (H, W, 3)
+            image = image.transpose(2, 0, 1)  # convert to channel first (3, H, W)
+        else:
+            image = image[np.newaxis, :, :]  # convert to channel first (1, H, W)
 
         # rescale to range [0, 1] then normalize to [-1, 1]
         image = image / 255.0  # to range [0, 1]
@@ -112,7 +115,7 @@ class TrainDataset(Dataset):
         """
         if self.color:
             return Compose([
-                ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
+                ToTensor(),  # convert ndarray to tensor -> shape (3, H, W)
                 Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))  # normalize image from [0, 1] to [-1, 1]
             ])
         else:

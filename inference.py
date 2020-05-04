@@ -62,7 +62,10 @@ def train(args):
     res = -1  # store the validation result of current epoch
 
     # dataset and loader
-    dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize)
+    if args.vgg or args.inception:
+        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize, color=True)
+    else:
+        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize, color=False)
     loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
                         pin_memory=pinMem, drop_last=dropLast, timeout=timeOut)
 
@@ -162,10 +165,42 @@ def select_model(args):
     :param args: command line args
     :return:
     """
+    # use the base vgg19 with batch normalization model
     if args.vgg:
-        return models.vgg16()
+        LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
+        model = models.vgg19_bn()  # 5 maxpooling layers
+        model.features = model.features[:27]  # modify feature extraction module to keep only the first three maxpooling layers
+        model.avgpool = nn.AdaptiveAvgPool2d(output_size=(3, 3))  # change the output of feature extraction module to 3x3
+        # modify the model classifier to match our dataset
+        model.classifier = nn.Sequential(nn.Linear(in_features=2304, out_features=1024),  # in 256*3*3, out 1024
+                                         nn.ReLU(),
+                                         nn.Dropout(p=0.5),  # keep the same dropout rate
+                                         nn.Linear(in_features=1024, out_features=512),
+                                         nn.ReLU(), nn.Dropout(p=0.5),
+                                         nn.Linear(in_features=512, out_features=71))  # output 71 classes
+        return model
+
+    # load inception v3 model
     elif args.inception:
-        return models.inception_v3()
+        LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
+        model = models.inception_v3()
+        newmodel = nn.Sequential()
+        for name, layer in model.named_children():
+            if name == 'Mixed_6b':
+                break  # stop before Mixed_6b layer, final out shape (768, 9, 9)
+            else:
+                newmodel.add_module(name, layer)
+        classifier = nn.Sequential(
+            nn.Conv2d(768, 256, kernel_size=3, stride=3),  # out shape (256, 3, 3)
+            nn.BatchNorm2d(256, eps=0.001, momentum=0.1),
+            nn.Flatten(),
+            nn.Linear(in_features=2304, out_features=512),
+            nn.Linear(in_features=512, out_features=71)
+        )
+        newmodel.add_module('classifier', classifier)
+        return newmodel
+
+    # load customzied model
     elif args.simple:
         return SimpleModel.CNN()
     else:
