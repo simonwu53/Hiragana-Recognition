@@ -1,7 +1,13 @@
 SEED = 53
 # ---training set statistics---
-TRAINSET_MEAN = 0.0933
-TRAINSET_STD = 0.1803
+MEAN = 0.0935
+STD = 0.1806
+MEAN_R = 0.0935
+MEAN_G = 0.0935
+MEAN_B = 0.0935
+STD_R = 0.1806
+STD_G = 0.1806
+STD_B = 0.1806
 
 # ---optimizer---
 LR = 1e-3  # learning rate

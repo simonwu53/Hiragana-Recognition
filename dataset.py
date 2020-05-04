@@ -2,6 +2,7 @@
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Normalize, ToTensor
 from sklearn.model_selection import train_test_split
+import cv2
 import numpy as np
 import logging
 from visualization import grid_plot
@@ -15,7 +16,8 @@ LOG = logging.getLogger('Dataset')
 
 
 class TrainDataset(Dataset):
-    def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train'):
+    def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train',
+                 color=False, normalize=False):
         """
         This is the class for training dataset used by PyTorch DataLoader.
         Dataset depicts the logic of how to access each (image, label) pair.
@@ -30,6 +32,8 @@ class TrainDataset(Dataset):
         :param mode: str, 'train' or 'test', based on the mode, the dataset will produce different samples,
                                              before using the instance, use 'set_mode' function to set instance behavior
                                              you can not change mode during iterating the dataset.
+        :param color: bool, if True returns 3 channels training images (converted from grayscale to RGB), default False.
+        :param normalize: bool, if True, normalize the image from a range of [0,1] to a range of [-1, 1]
         """
         # load file
         file = np.load(data_path)
@@ -39,12 +43,14 @@ class TrainDataset(Dataset):
         self.labels = file['arr_1']  # shape (12211,)
 
         # attributes
+        self.mode = mode
+        self.color = color
+        self.normalize = normalize
         self.c2l = None  # store class->label name lookup, e.g. {1:'a', 2:'ba'...}
         self.ci, self.cc = np.unique(self.labels, return_counts=True)  # classes statistics: unique labels, class count
         self.transform = self.compose_transform()  # a set of defined preprocessing techniques for the image
         self.trainset = {'image': None, 'label': None}  # training set after splitting
         self.testset = {'image': None, 'label': None}  # testing set after splitting
-        self.mode = mode
 
         # preprocessing
         self.label_to_classes()
@@ -88,11 +94,14 @@ class TrainDataset(Dataset):
         image = dataset['image'][idx].reshape(50, 50)  # shape (H, W)
 
         # TODO: add more preprocessing techniques later here
-        # ...
+        # convert to RGB if needed
+        if self.color:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)  # shape (H, W, 3)
 
         # rescale to range [0, 1] then normalize to [-1, 1]
         image = image / 255.0  # to range [0, 1]
-        image = self.transform(image)
+        if self.normalize:
+            image = self.transform(image)
 
         return image, label
 
@@ -101,10 +110,16 @@ class TrainDataset(Dataset):
         A set of preprocessing to perform
         :return: a magic blackbox(pipeline) to perform the defined preprocessing techniques.
         """
-        return Compose([
-            ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
-            Normalize(mean=(TRAINSET_MEAN,), std=(TRAINSET_STD,))  # normalize image to [-1, 1]
-        ])
+        if self.color:
+            return Compose([
+                ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
+                Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))  # normalize image from [0, 1] to [-1, 1]
+            ])
+        else:
+            return Compose([
+                ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
+                Normalize(mean=(0.5,), std=(0.5,))  # normalize image from [0, 1] to [-1, 1]
+            ])
 
     def label_to_classes(self):
         """
