@@ -80,7 +80,9 @@ def train(args):
         model.train()  # switch model to training mode
         dataset.train()  # switch dataset to training mode
         running_loss = 0.0  # running loss for training set
-        running_loss_eval = 0.0  # running loss for testing set
+        running_acc = 0.0  # running accuracy for training set
+        running_loss_eval = 0.0  # running loss for validation set
+        running_acc_eval = 0.0  # running accuracy for validation set
         LOG.warning('Start epoch %d.' % (epoch + 1))
 
         # iterating each batch
@@ -89,20 +91,24 @@ def train(args):
 
             logits = model(img)  # model inference
             loss = loss_batch(logits, label, criteria, optimizer)
+            acc = (logits.argmax(1) == label).float().sum()/BS
 
             # collect statistics
             running_loss += loss.item()
+            running_acc += acc  # accuracy of this batch
 
             # update training statistics
             if i % TBUpdate == 0:
                 writer.add_scalar('Train/Loss', loss.item(), global_i)  # or optimizer, dropout info
+                writer.add_scalar('Train/Accuracy', acc, global_i)
                 writer.flush()
 
             # update global step
             global_i += 1
 
         # show epoch info
-        LOG.warning('Epoch %d: running loss: %.4f' % (epoch + 1, running_loss / len(loader)))
+        LOG.warning('Epoch %d: running loss: %.4f  running accuracy: %.2f' %
+                    (epoch + 1, running_loss / len(loader), running_acc / len(loader)))
 
         # validation
         model.eval()  # switch model to validation mode
@@ -114,13 +120,17 @@ def train(args):
                 img, label = data[0].cuda(), data[1].cuda()
                 logits = model(img)
                 loss = loss_batch(logits, label, criteria)
+                acc = (logits.argmax(1) == label).float().sum()/BS
                 running_loss_eval += loss.item()
+                running_acc_eval += acc
 
         # validation results
         res = running_loss_eval / len(loader)
+        acc_eval = running_acc_eval / len(loader)
         writer.add_scalar('Test/Loss', res, global_i)
+        writer.add_scalar('Test/Accuracy', acc_eval, global_i)
         writer.flush()
-        LOG.warning('Epoch %d: validation loss: %.4f' % (epoch + 1, res))
+        LOG.warning('Epoch %d: validation loss: %.4f  accuracy: %.2f' % (epoch + 1, res, acc_eval))
 
         # store the best model
         if res < best_eval:
