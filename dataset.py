@@ -17,7 +17,7 @@ LOG = logging.getLogger('Dataset')
 
 class TrainDataset(Dataset):
     def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train',
-                 color=False, normalize=False):
+                 color=False, normalize=True):
         """
         This is the class for training dataset used by PyTorch DataLoader.
         Dataset depicts the logic of how to access each (image, label) pair.
@@ -97,9 +97,6 @@ class TrainDataset(Dataset):
         # convert to RGB if needed
         if self.color:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)  # shape (H, W, 3)
-            image = image.transpose(2, 0, 1)  # convert to channel first (3, H, W)
-        else:
-            image = image[np.newaxis, :, :]  # convert to channel first (1, H, W)
 
         # rescale to range [0, 1] then normalize to [-1, 1]
         image = image / 255.0  # to range [0, 1]
