@@ -5,8 +5,10 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 from torchvision import models
+from torchvision.utils import make_grid
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
 # ---modules---
 from dataset import TrainDataset
 from net import SimpleModel
@@ -17,6 +19,7 @@ from datetime import datetime
 import shutil
 import logging
 from config import *
+from lib import sample_images
 
 
 # Set logging
@@ -60,6 +63,8 @@ def train(args):
     global_i = 0  # global steps counter
     best_eval = 10000  # store the best validation result
     res = -1  # store the validation result of current epoch
+    graph_loaded = False  # tensorboard graph loading status
+    n_samples = 500  # samples of features to project in tensorboard
 
     # dataset and loader
     if args.vgg or args.inception:
@@ -68,12 +73,21 @@ def train(args):
         dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize, color=False)
     loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
                         pin_memory=pinMem, drop_last=dropLast, timeout=timeOut)
+    if len(loader) < 1:
+        LOG.error('Dataset maybe empty.')
+        raise ValueError('Dataset maybe empty.')
 
     # continue training check
     if args.load:
         trained_epoch, global_i = load_ckpt(model, optimizer, args.load)
     else:
         trained_epoch = 0
+
+    # sample images and show the overview of the input features
+    sampled_images, sampled_labels = sample_images(dataset.trainset['image'], dataset.trainset['label'], n_samples)
+    writer.add_embedding(sampled_images,
+                         metadata=[dataset.c2l[l] for l in sampled_labels],
+                         label_img=torch.from_numpy(sampled_images.reshape(n_samples, 1, 50, 50)))
 
     # start training epoch
     for epoch in range(trained_epoch, trained_epoch+Epochs):
@@ -99,6 +113,12 @@ def train(args):
 
             # update training statistics
             if i % TBUpdate == 0:
+                if i == 0:
+                    img_grid = make_grid(img)
+                    writer.add_image('Train/Batch', img_grid, global_i)
+                    if not graph_loaded:  # only add once
+                        writer.add_graph(model, img)
+                        graph_loaded = True
                 writer.add_scalar('Train/Loss', loss.item(), global_i)  # or optimizer, dropout info
                 writer.add_scalar('Train/Accuracy', acc, global_i)
                 writer.flush()
@@ -123,12 +143,16 @@ def train(args):
                 acc = (logits.argmax(1) == label).float().sum()/BS
                 running_loss_eval += loss.item()
                 running_acc_eval += acc
+                # validation batch for visualization
+                if i == 0:
+                    img_grid = make_grid(img)
+                    writer.add_image('Validation/Batch', img_grid, global_i)
 
         # validation results
         res = running_loss_eval / len(loader)
         acc_eval = running_acc_eval / len(loader)
-        writer.add_scalar('Test/Loss', res, global_i)
-        writer.add_scalar('Test/Accuracy', acc_eval, global_i)
+        writer.add_scalar('Validation/Loss', res, global_i)
+        writer.add_scalar('Validation/Accuracy', acc_eval, global_i)
         writer.flush()
         LOG.warning('Epoch %d: validation loss: %.4f  accuracy: %.2f' % (epoch + 1, res, acc_eval))
 
@@ -177,6 +201,7 @@ def select_model(args):
     """
     # use the base vgg19 with batch normalization model
     if args.vgg:
+        LOG.warning('Loading VGG19 with Batch Normalization model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
         model = models.vgg19_bn()  # 5 maxpooling layers
         model.features = model.features[:27]  # modify feature extraction module to keep only the first three maxpooling layers
@@ -192,6 +217,7 @@ def select_model(args):
 
     # load inception v3 model
     elif args.inception:
+        LOG.warning('Loading Inception v3 model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
         model = models.inception_v3()
         newmodel = nn.Sequential()

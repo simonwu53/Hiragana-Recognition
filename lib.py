@@ -87,3 +87,10 @@ def train_dataset_statistics(dataset, img_shape=(50, 50, 1)):
         print('G channel STD: %.4f' % std_g.cpu().item())
         print('B channel STD: %.4f' % std_b.cpu().item())
         return (mean_r, mean_g, mean_b), (std_r, std_g, std_b)
+
+
+def sample_images(images, labels, n_samples=500):
+    assert images.shape[0] > n_samples, 'Sample quantity must be smaller than the quantity of the dataset.'
+    assert n_samples > 100, 'Too less samples.'
+    idx = np.random.choice(images.shape[0], n_samples, replace=False)
+    return images[idx], labels[idx]
