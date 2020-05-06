@@ -132,7 +132,8 @@ dmypy.json
 .idea/
 
 # checkpoint files
-*.tar
+results/
+!*.md
 
 # dataset files
 dataset/data.npz
