@@ -46,6 +46,7 @@ Please refer to the "requirements.txt" file in the project folder.
 | \ | VGG 19 with BN | Inception v3 | Customized CNN |
 | :--- | :---: | :---: | :---: |
 | Input Size | 224x224x3 | 299x299x3 | 50x50x1 |
+| Normalized | True | True | True |
 | Batch Size | 8 | 8 | 8 |
 | Learning Rate | 1e-3 | 1e-3 | 1e-3 |
 | Train/Test Split | 85%/15% | 85%/15% | 85%/15% |

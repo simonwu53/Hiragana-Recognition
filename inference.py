@@ -35,22 +35,6 @@ def train(args):
     :param args: args from command line inputs
     :return: -
     """
-    # create training directory
-    save_root = os.path.join('./results', datetime.now().strftime("%H%M_%d%m%Y"))
-    if os.path.exists(save_root):
-        LOG.warning('Output folder already exists, cleaning before continuing...')
-        shutil.rmtree(save_root)  # delete output folder if exists!!!
-    os.makedirs(save_root)
-    log_dir = os.path.join(save_root, 'log/')
-    os.mkdir(log_dir)
-    ckpt_dir = os.path.join(save_root, 'checkpoints/')
-    os.mkdir(ckpt_dir)
-    # save configuration to the training directory
-    shutil.copy2('./config.py', save_root)
-
-    # TensorBoard summary writer -- for training process visualization
-    writer = SummaryWriter(log_dir=log_dir, max_queue=10, flush_secs=120)
-
     # get CNN model
     model = select_model(args)
     model.cuda()
@@ -81,11 +65,26 @@ def train(args):
         LOG.error('Dataset maybe empty.')
         raise ValueError('Dataset maybe empty.')
 
-    # continue training check
+    # continue training check & prepare saving directory
     if args.load:
         trained_epoch, global_i = load_ckpt(model, optimizer, args.load)
+        save_root = os.path.dirname(os.path.dirname(args.load))
+        log_dir = os.path.join(save_root, 'log/')
+        ckpt_dir = os.path.join(save_root, 'checkpoints/')
     else:
         trained_epoch = 0
+        save_root = os.path.join('./results', datetime.now().strftime("%H%M_%d%m%Y"))
+        os.mkdir(save_root)
+        log_dir = os.path.join(save_root, 'log/')
+        os.mkdir(log_dir)
+        ckpt_dir = os.path.join(save_root, 'checkpoints/')
+        os.mkdir(ckpt_dir)
+
+    # save configuration to the training directory
+    shutil.copy2('./config.py', save_root)
+
+    # TensorBoard summary writer -- for training process visualization
+    writer = SummaryWriter(log_dir=log_dir, max_queue=10, flush_secs=120)
 
     # sample images and show the overview of the input features
     sampled_images, sampled_labels = sample_images(dataset.trainset['image'], dataset.trainset['label'], n_samples)
