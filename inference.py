@@ -19,7 +19,7 @@ from datetime import datetime
 import shutil
 import logging
 from config import *
-from lib import sample_images
+from lib import sample_images, count_parameters
 
 
 # Set logging
@@ -234,6 +234,7 @@ def select_model(args):
                                          nn.ReLU(),
                                          nn.Dropout(p=0.5),
                                          nn.Linear(in_features=768, out_features=71))  # output 71 classes
+        LOG.warning('Trainable parameters: %d' % count_parameters(model))
         return model
 
     # load inception v3 model
@@ -244,11 +245,14 @@ def select_model(args):
         LOG.warning('Loading Inception v3 model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
         model = models.inception_v3(num_classes=71)
+        LOG.warning('Trainable parameters: %d' % count_parameters(model))
         return model
 
     # load customzied model
     elif args.simple:
-        return SimpleModel.CNN()
+        model = SimpleModel.CNN()
+        LOG.warning('Trainable parameters: %d' % count_parameters(model))
+        return model
     else:
         LOG.error("You must select a model to train.")
         raise ValueError("No model selected. use --vgg or --inception")

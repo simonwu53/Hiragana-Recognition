@@ -94,3 +94,8 @@ def sample_images(images, labels, n_samples=500):
     assert n_samples > 100, 'Too less samples.'
     idx = np.random.choice(images.shape[0], n_samples, replace=False)
     return images[idx], labels[idx]
+
+
+def count_parameters(model):
+    """Calculate number of total parameters in a model"""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
