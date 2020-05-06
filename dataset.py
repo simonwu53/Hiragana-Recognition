@@ -17,7 +17,7 @@ LOG = logging.getLogger('Dataset')
 
 class TrainDataset(Dataset):
     def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train',
-                 color=False, normalize=True):
+                 color=False, normalize=True, img_size=50):
         """
         This is the class for training dataset used by PyTorch DataLoader.
         Dataset depicts the logic of how to access each (image, label) pair.
@@ -33,13 +33,15 @@ class TrainDataset(Dataset):
                                              before using the instance, use 'set_mode' function to set instance behavior
                                              you can not change mode during iterating the dataset.
         :param color: bool, if True returns 3 channels training images (converted from grayscale to RGB), default False.
+        :param img_size: int, specify the image shape after pre-processing, default size is 50
         :param normalize: bool, if True, normalize the image from a range of [0,1] to a range of [-1, 1]
         """
         # load file
         file = np.load(data_path)
 
         # training data
-        self.images = file['arr_0']  # shape (12211, 2500)
+        self.images = file['arr_0'].astype(np.uint8)  # shape (12211, 2500)
+        self.images = self.images.reshape(self.images.shape[0], 50, 50)  # shape (12211, 50, 50)
         self.labels = file['arr_1']  # shape (12211,)
 
         # attributes
@@ -53,6 +55,9 @@ class TrainDataset(Dataset):
         self.testset = {'image': None, 'label': None}  # testing set after splitting
 
         # preprocessing
+        if isinstance(img_size, int):
+            if img_size > 50:
+                self.upsampling((img_size, img_size))
         self.label_to_classes()
         self.train_test_split(test_size, train_size)
         self.train_len = self.trainset['image'].shape[0]  # training set size
@@ -91,14 +96,14 @@ class TrainDataset(Dataset):
         label = dataset['label'][idx]
 
         # get training image and reshape
-        image = dataset['image'][idx].reshape(50, 50)  # shape (H, W)
+        image = dataset['image'][idx]  # shape (H, W)
 
         # TODO: add more preprocessing techniques later here
         # convert to RGB if needed
         if self.color:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)  # shape (H, W, 3)
 
-        # rescale to range [0, 1] then normalize to [-1, 1]
+        # rescale to range [0, 1] then normalize to 0-mean, std at 1
         image = image / 255.0  # to range [0, 1]
         if self.normalize:
             image = self.transform(image)
@@ -113,12 +118,12 @@ class TrainDataset(Dataset):
         if self.color:
             return Compose([
                 ToTensor(),  # convert ndarray to tensor -> shape (3, H, W)
-                Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))  # normalize image from [0, 1] to [-1, 1]
+                Normalize(mean=(MEAN_R, MEAN_G, MEAN_B), std=(STD_R, STD_G, STD_B))  # normalize to 0-mean, std at 1
             ])
         else:
             return Compose([
                 ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
-                Normalize(mean=(0.5,), std=(0.5,))  # normalize image from [0, 1] to [-1, 1]
+                Normalize(mean=(MEAN,), std=(STD,))  # normalize to 0-mean, std at 1
             ])
 
     def label_to_classes(self):
@@ -127,6 +132,7 @@ class TrainDataset(Dataset):
         and prepare a dictionary for converting classes back to label string.
         :return: -
         """
+        LOG.warning("Converting labels to classes integers...")
         # get all unique labels
         labels = np.unique(self.labels)
 
@@ -136,7 +142,7 @@ class TrainDataset(Dataset):
             c2l[i] = l.decode('utf-8')
             l2c[l.decode('utf-8')] = i
 
-        self.labels = np.array(list(map(lambda x: l2c[x.decode('utf-8')], self.labels)))
+        self.labels = np.array(list(map(lambda x: l2c[x.decode('utf-8')], self.labels)), dtype=np.int32)
         self.c2l = c2l
         return
 
@@ -147,9 +153,26 @@ class TrainDataset(Dataset):
         :param train_size: float or int, see doc in the __init__ func.
         :return: -
         """
+        LOG.warning("Splitting training & testing sets...")
         self.trainset['image'], self.testset['image'], self.trainset['label'], self.testset['label'] = \
             train_test_split(self.images, self.labels, test_size=test_size, train_size=train_size,
                              stratify=self.labels, random_state=SEED)
+        return
+
+    def upsampling(self, size):
+        """
+        Up-sampling the raw image to bigger size.
+
+        :param size: Tuple[int, int], target size, should be greater than 50
+        :return: -
+        """
+        LOG.warning("Up-sampling the images to (%d, %d)" % size)
+        assert size[0] > 50, "Target size must be greater than default size."
+
+        new_images = np.zeros((self.images.shape[0],)+size, dtype=np.uint8)  # shape (12211, size[0], size[1])
+        for i, img in enumerate(self.images):  # shape (12211, 50, 50)
+            new_images[i] = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
+        self.images = new_images
         return
 
     def train(self):
