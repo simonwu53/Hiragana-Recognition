@@ -107,9 +107,15 @@ def train(args):
         # iterating each batch
         for i, data in enumerate(tqdm(loader)):
             img, label = data[0].float().cuda(), data[1].long().cuda()  # push the data to GPU
-            logits = model(img)  # model inference
-            loss = loss_batch(logits, label, criteria, optimizer)
-            acc = (logits.argmax(1) == label).float().sum()/BS
+            pred = model(img)  # model inference
+
+            # loss for one output and tuple output
+            if opt.inception:
+                loss = loss_batch(pred, label, criteria, optimizer, mode='inception')
+                acc = (pred[0].argmax(1) == label).float().sum() / BS
+            else:
+                loss = loss_batch(pred, label, criteria, optimizer)
+                acc = (pred.argmax(1) == label).float().sum() / BS
 
             # collect statistics
             running_loss += loss.item()
@@ -142,9 +148,9 @@ def train(args):
             LOG.warning('Evaluation on testing data...')
             for i, data in enumerate(tqdm(loader)):
                 img, label = data[0].float().cuda(), data[1].long().cuda()
-                logits = model(img)
-                loss = loss_batch(logits, label, criteria)
-                acc = (logits.argmax(1) == label).float().sum()/BS
+                pred = model(img)
+                loss = loss_batch(pred, label, criteria)
+                acc = (pred.argmax(1) == label).float().sum() / BS
                 running_loss_eval += loss.item()
                 running_acc_eval += acc
                 # validation batch for visualization
@@ -176,24 +182,33 @@ def test(args):
     return
 
 
-def loss_batch(logits, gt, func, opt=None):
+def loss_batch(pred, gt, func, optimizer=None, mode='normal'):
     """
     calculate the losses from the model's output and the ground truth
-    :param logits: model output, must be compatible with ground truth and loss function
+    :param pred: model output, must be compatible with ground truth and loss function
     :param gt: ground truth, must be compatible with logits and loss function
     :param func: loss function, must be compatible with logits and ground truth
-    :param opt: optimizer instance
+    :param optimizer: optimizer instance
+    :param mode: str, 'normal' or 'inception', inception has additional auxiliary logits
     :return: loss value
     """
-    loss = func(logits, gt)
+    if mode == 'normal':
+        loss = func(pred, gt)
+    elif mode == 'inception':
+        logits, aux_logits = pred
+        l1, l2 = func(logits, gt), func(aux_logits, gt)
+        loss = l1 + 0.3 * l2
+    else:
+        LOG.error("Unknown model output? Need a method to compute loss...")
+        raise ValueError("Unknown model output? Need a method to compute loss...")
 
-    if opt is not None:
+    if optimizer is not None:
         # auto-calculate gradients
         loss.backward()
         # apply gradients
-        opt.step()
+        optimizer.step()
         # zero the parameter gradients
-        opt.zero_grad()
+        optimizer.zero_grad()
     return loss
 
 
@@ -205,7 +220,7 @@ def select_model(args):
     """
     # use the base vgg19 with batch normalization model
     if args.vgg:
-        if upSampling < 244:
+        if upSampling < 224:
             LOG.error("Minimum input size for VGG net is 224!")
             raise ValueError("Minimum input size for VGG net is 224!")
         LOG.warning('Loading VGG19 with Batch Normalization model...')
@@ -223,13 +238,12 @@ def select_model(args):
 
     # load inception v3 model
     elif args.inception:
-        if upSampling < 244:
-            LOG.error("Minimum input size for Inception v3 net is 224!")
-            raise ValueError("Minimum input size for Inception v3 net is 224!")
+        if upSampling < 299 and BS < 2:
+            LOG.error("Minimum input size for Inception v3 net is 299, batch size must > 1!")
+            raise ValueError("Minimum input size for Inception v3 net is 299, batch size must > 1!")
         LOG.warning('Loading Inception v3 model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
-        model = models.inception_v3()
-        model.fc = nn.Linear(in_features=2048, out_features=71)
+        model = models.inception_v3(num_classes=71)
         return model
 
     # load customzied model
