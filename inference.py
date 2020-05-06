@@ -45,6 +45,8 @@ def train(args):
     os.mkdir(log_dir)
     ckpt_dir = os.path.join(save_root, 'checkpoints/')
     os.mkdir(ckpt_dir)
+    # save configuration to the training directory
+    shutil.copy2('./config.py', save_root)
 
     # TensorBoard summary writer -- for training process visualization
     writer = SummaryWriter(log_dir=log_dir, max_queue=10, flush_secs=120)
@@ -68,9 +70,11 @@ def train(args):
 
     # dataset and loader
     if args.vgg or args.inception:
-        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize, color=True)
+        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize,
+                               color=True, img_size=upSampling)
     else:
-        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize, color=False)
+        dataset = TrainDataset(data_path=args.dataset, test_size=testSize, train_size=trainSize,
+                               color=False, img_size=upSampling)
     loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
                         pin_memory=pinMem, drop_last=dropLast, timeout=timeOut)
     if len(loader) < 1:
@@ -85,9 +89,9 @@ def train(args):
 
     # sample images and show the overview of the input features
     sampled_images, sampled_labels = sample_images(dataset.trainset['image'], dataset.trainset['label'], n_samples)
-    writer.add_embedding(sampled_images,
+    writer.add_embedding(sampled_images.reshape(n_samples, -1),
                          metadata=[dataset.c2l[l] for l in sampled_labels],
-                         label_img=torch.from_numpy(sampled_images.reshape(n_samples, 1, 50, 50)))
+                         label_img=torch.from_numpy(sampled_images[:, np.newaxis, :, :]))
 
     # start training epoch
     for epoch in range(trained_epoch, trained_epoch+Epochs):
@@ -97,12 +101,12 @@ def train(args):
         running_acc = 0.0  # running accuracy for training set
         running_loss_eval = 0.0  # running loss for validation set
         running_acc_eval = 0.0  # running accuracy for validation set
+        print()
         LOG.warning('Start epoch %d.' % (epoch + 1))
 
         # iterating each batch
         for i, data in enumerate(tqdm(loader)):
-            img, label = data[0].cuda(), data[1].cuda()  # push the data to GPU
-
+            img, label = data[0].float().cuda(), data[1].long().cuda()  # push the data to GPU
             logits = model(img)  # model inference
             loss = loss_batch(logits, label, criteria, optimizer)
             acc = (logits.argmax(1) == label).float().sum()/BS
@@ -137,7 +141,7 @@ def train(args):
         with torch.no_grad():  # no need to track computation graph during testing, save resources and speedups
             LOG.warning('Evaluation on testing data...')
             for i, data in enumerate(tqdm(loader)):
-                img, label = data[0].cuda(), data[1].cuda()
+                img, label = data[0].float().cuda(), data[1].long().cuda()
                 logits = model(img)
                 loss = loss_batch(logits, label, criteria)
                 acc = (logits.argmax(1) == label).float().sum()/BS
@@ -201,40 +205,32 @@ def select_model(args):
     """
     # use the base vgg19 with batch normalization model
     if args.vgg:
+        if upSampling < 244:
+            LOG.error("Minimum input size for VGG net is 224!")
+            raise ValueError("Minimum input size for VGG net is 224!")
         LOG.warning('Loading VGG19 with Batch Normalization model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
         model = models.vgg19_bn()  # 5 maxpooling layers
-        model.features = model.features[:27]  # modify feature extraction module to keep only the first three maxpooling layers
-        model.avgpool = nn.AdaptiveAvgPool2d(output_size=(3, 3))  # change the output of feature extraction module to 3x3
         # modify the model classifier to match our dataset
-        model.classifier = nn.Sequential(nn.Linear(in_features=2304, out_features=1024),  # in 256*3*3, out 1024
+        model.classifier = nn.Sequential(nn.Linear(in_features=25088, out_features=4096),  # in 256*3*3, out 1024
                                          nn.ReLU(),
                                          nn.Dropout(p=0.5),  # keep the same dropout rate
-                                         nn.Linear(in_features=1024, out_features=512),
-                                         nn.ReLU(), nn.Dropout(p=0.5),
-                                         nn.Linear(in_features=512, out_features=71))  # output 71 classes
+                                         nn.Linear(in_features=4096, out_features=768),
+                                         nn.ReLU(),
+                                         nn.Dropout(p=0.5),
+                                         nn.Linear(in_features=768, out_features=71))  # output 71 classes
         return model
 
     # load inception v3 model
     elif args.inception:
+        if upSampling < 244:
+            LOG.error("Minimum input size for Inception v3 net is 224!")
+            raise ValueError("Minimum input size for Inception v3 net is 224!")
         LOG.warning('Loading Inception v3 model...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
         model = models.inception_v3()
-        newmodel = nn.Sequential()
-        for name, layer in model.named_children():
-            if name == 'Mixed_6b':
-                break  # stop before Mixed_6b layer, final out shape (768, 9, 9)
-            else:
-                newmodel.add_module(name, layer)
-        classifier = nn.Sequential(
-            nn.Conv2d(768, 256, kernel_size=3, stride=3),  # out shape (256, 3, 3)
-            nn.BatchNorm2d(256, eps=0.001, momentum=0.1),
-            nn.Flatten(),
-            nn.Linear(in_features=2304, out_features=512),
-            nn.Linear(in_features=512, out_features=71)
-        )
-        newmodel.add_module('classifier', classifier)
-        return newmodel
+        model.fc = nn.Linear(in_features=2048, out_features=71)
+        return model
 
     # load customzied model
     elif args.simple:
@@ -285,8 +281,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='./dataset/data.npz', help="Path to the dataset.")
     parser.add_argument('--train', action='store_true', help='Start training process.')
     parser.add_argument('--test', action='store_true', help='Start testing process.')
-    parser.add_argument('--vgg', action='store_true', help='Use VGG Net.')
-    parser.add_argument('--simple', action='store_true', help='Use simple CNN.')
+    parser.add_argument('--vgg', action='store_true', help='Use VGG 19 with Batch Normalization.')
+    parser.add_argument('--simple', action='store_true', help='Use customized CNN.')
     parser.add_argument('--inception', action='store_true', help='Use Inception V3 Net.')
     opt = parser.parse_args()
     print(opt)

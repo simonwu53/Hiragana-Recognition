@@ -14,6 +14,7 @@ LR = 1e-3  # learning rate
 L2 = 0.0  # L2 regularization
 
 # ---data loader---
+upSampling = 224
 testSize = 0.15
 trainSize = None
 BS = 8  # batch size
