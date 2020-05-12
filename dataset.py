@@ -7,6 +7,7 @@ import numpy as np
 import logging
 from visualization import grid_plot
 from config import *
+import random
 
 
 # Set logging
@@ -41,18 +42,24 @@ class TrainDataset(Dataset):
 
         # training data
         self.images = file['arr_0'].astype(np.uint8)  # shape (12211, 2500)
-        self.images = self.images.reshape(self.images.shape[0], 50, 50)  # shape (12211, 50, 50)
+        self.images = self.images.reshape(
+            self.images.shape[0], 50, 50)  # shape (12211, 50, 50)
         self.labels = file['arr_1']  # shape (12211,)
 
         # attributes
         self.mode = mode
         self.color = color
         self.normalize = normalize
-        self.c2l = None  # store class->label name lookup, e.g. {1:'a', 2:'ba'...}
-        self.ci, self.cc = np.unique(self.labels, return_counts=True)  # classes statistics: unique labels, class count
-        self.transform = self.compose_transform()  # a set of defined preprocessing techniques for the image
-        self.trainset = {'image': None, 'label': None}  # training set after splitting
-        self.testset = {'image': None, 'label': None}  # testing set after splitting
+        # store class->label name lookup, e.g. {1:'a', 2:'ba'...}
+        self.c2l = None
+        # classes statistics: unique labels, class count
+        self.ci, self.cc = np.unique(self.labels, return_counts=True)
+        # a set of defined preprocessing techniques for the image
+        self.transform = self.compose_transform()
+        # training set after splitting
+        self.trainset = {'image': None, 'label': None}
+        # testing set after splitting
+        self.testset = {'image': None, 'label': None}
 
         # preprocessing
         if isinstance(img_size, int):
@@ -118,12 +125,14 @@ class TrainDataset(Dataset):
         if self.color:
             return Compose([
                 ToTensor(),  # convert ndarray to tensor -> shape (3, H, W)
-                Normalize(mean=(MEAN_R, MEAN_G, MEAN_B), std=(STD_R, STD_G, STD_B))  # normalize to 0-mean, std at 1
+                Normalize(mean=(MEAN_R, MEAN_G, MEAN_B), std=(
+                    STD_R, STD_G, STD_B))  # normalize to 0-mean, std at 1
             ])
         else:
             return Compose([
                 ToTensor(),  # convert ndarray to tensor -> shape (1, H, W)
-                Normalize(mean=(MEAN,), std=(STD,))  # normalize to 0-mean, std at 1
+                # normalize to 0-mean, std at 1
+                Normalize(mean=(MEAN,), std=(STD,))
             ])
 
     def label_to_classes(self):
@@ -142,7 +151,8 @@ class TrainDataset(Dataset):
             c2l[i] = l.decode('utf-8')
             l2c[l.decode('utf-8')] = i
 
-        self.labels = np.array(list(map(lambda x: l2c[x.decode('utf-8')], self.labels)), dtype=np.int32)
+        self.labels = np.array(
+            list(map(lambda x: l2c[x.decode('utf-8')], self.labels)), dtype=np.int32)
         self.c2l = c2l
         return
 
@@ -169,9 +179,11 @@ class TrainDataset(Dataset):
         LOG.warning("Up-sampling the images to (%d, %d)" % size)
         assert size[0] > 50, "Target size must be greater than default size."
 
-        new_images = np.zeros((self.images.shape[0],)+size, dtype=np.uint8)  # shape (12211, size[0], size[1])
+        # shape (12211, size[0], size[1])
+        new_images = np.zeros((self.images.shape[0],)+size, dtype=np.uint8)
         for i, img in enumerate(self.images):  # shape (12211, 50, 50)
-            new_images[i] = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
+            new_images[i] = cv2.resize(
+                img, size, interpolation=cv2.INTER_LANCZOS4)
         self.images = new_images
         return
 
@@ -197,7 +209,45 @@ class TrainDataset(Dataset):
         :return: -
         """
         # random choose one image from the category
-        img_list = [self.images[np.random.choice(np.arange(self.images.shape[0])[self.labels==k], 1)[0]].reshape(50, 50) for k in self.c2l]
+        img_list = [self.images[np.random.choice(np.arange(self.images.shape[0])[
+                                                 self.labels == k], 1)[0]].reshape(50, 50) for k in self.c2l]
         labels = [self.c2l[k] for k in self.c2l]
         grid_plot(img_list, labels=labels)
         return
+
+    def get_random_canvas(self, characters):
+        """
+        Create canvas with input characters copied on to it
+
+        :param characters: np.array() (n, H, W)
+
+        :return: canvas np.array() (H*(n+1) x W*(n+1)), List of bounding boxes (x_1, y_1, x_2, y_2)
+        """
+        n = characters.shape[0]
+        W, H = characters.shape[1:]
+        canvas = np.zeros(((n+1)*H, (n+1)*W))
+
+        def get_random_location(n, W, H):
+            x1, y1 = random.randint(0, n*H-1), random.randint(0, n*W-1)
+            x2, y2 = x1 + H, y1 + W
+            return (x1, y1, x2, y2)
+        locs = []
+        retry = True
+        while retry:
+            locs = []
+            for c in characters:
+                locs.append(get_random_location(n, W, H))
+            ok = []
+            for loc1 in locs:
+                for loc2 in locs:
+                    if loc1 != loc2:
+                        if abs(loc1[0] - loc2[0]) > W and abs(loc1[1] - loc2[1]) > H:
+                            ok.append(0)
+                        else:
+                            ok.append(1)
+            retry = np.sum(ok) != 0
+
+        for i in range(len(locs)):
+            loc = locs[i]
+            canvas[loc[1]:loc[3], loc[0]:loc[2]] = characters[i]
+        return canvas, locs
