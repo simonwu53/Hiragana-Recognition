@@ -7,7 +7,6 @@ import numpy as np
 import logging
 from visualization import grid_plot
 from config import *
-import random
 
 
 # Set logging
@@ -214,40 +213,3 @@ class TrainDataset(Dataset):
         labels = [self.c2l[k] for k in self.c2l]
         grid_plot(img_list, labels=labels)
         return
-
-    def get_random_canvas(self, characters):
-        """
-        Create canvas with input characters copied on to it
-
-        :param characters: np.array() (n, H, W)
-
-        :return: canvas np.array() (H*(n+1) x W*(n+1)), List of bounding boxes (x_1, y_1, x_2, y_2)
-        """
-        n = characters.shape[0]
-        W, H = characters.shape[1:]
-        canvas = np.zeros(((n+1)*H, (n+1)*W))
-
-        def get_random_location(n, W, H):
-            x1, y1 = random.randint(0, n*H-1), random.randint(0, n*W-1)
-            x2, y2 = x1 + H, y1 + W
-            return (x1, y1, x2, y2)
-        locs = []
-        retry = True
-        while retry:
-            locs = []
-            for c in characters:
-                locs.append(get_random_location(n, W, H))
-            ok = []
-            for loc1 in locs:
-                for loc2 in locs:
-                    if loc1 != loc2:
-                        if abs(loc1[0] - loc2[0]) > W and abs(loc1[1] - loc2[1]) > H:
-                            ok.append(0)
-                        else:
-                            ok.append(1)
-            retry = np.sum(ok) != 0
-
-        for i in range(len(locs)):
-            loc = locs[i]
-            canvas[loc[1]:loc[3], loc[0]:loc[2]] = characters[i]
-        return canvas, locs
