@@ -31,6 +31,7 @@ class TrainCanvasDataset(Dataset):
         :param min_characters: Optional[int], minimum number of characters per canvas
         :param max_scale: Optional[int], maximum character size in pixel, default size is 50x50
         :param min_scale: Optional[int], minimum character size in pixel, default size is 50x50
+        :param color: bool, if True, return 3 channel RGB image
         """
         # load file
         file = np.load(data_path)
@@ -63,6 +64,8 @@ class TrainCanvasDataset(Dataset):
         self.min_scale = kwargs.get('min_scale', 20)  # not used atm
         self.max_scale = kwargs.get('max_scale', 100)  # not used atm
         LOG.warning('Characters size range: [%d, %d] (not used)' % (self.min_scale, self.max_scale))
+        self.color = kwargs.get('color', False)
+        LOG.warning('Color mode %s.' % 'on' if self.color else 'off')
         return
 
     def __len__(self):
@@ -96,7 +99,13 @@ class TrainCanvasDataset(Dataset):
         images = np.take(self.images, indices, axis=0)
 
         canvas, bboxes = get_random_canvas(images)
-        canvas = canvas / 255.0  # convert to range [0, 1]
+
+        # convert to color mode
+        if self.color:
+            canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2RGB)
+
+        # convert to range [0, 1]
+        canvas = canvas / 255.0
 
         return canvas, bboxes, labels
 

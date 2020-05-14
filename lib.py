@@ -127,7 +127,7 @@ def get_random_canvas(characters):
     """
     n = characters.shape[0]
     W, H = characters.shape[1:]
-    canvas = np.zeros(((n+1)*H, (n+1)*W))
+    canvas = np.zeros(((n+1)*H, (n+1)*W), np.uint8)
 
     def get_random_location(n, W, H):
         x1, y1 = random.randint(0, n*H-1), random.randint(0, n*W-1)
