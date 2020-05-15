@@ -1,4 +1,5 @@
 # training dataset implement here
+import torch
 from torch.utils.data import Dataset
 import numpy as np
 import logging
@@ -104,6 +105,10 @@ class TrainCanvasDataset(Dataset):
         if self.color:
             canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2RGB)
 
+        # add channel dim for grayscale
+        else:
+            canvas = canvas[:, :, np.newaxis]
+
         # convert to range [0, 1]
         canvas = canvas / 255.0
 
@@ -161,3 +166,21 @@ class TrainCanvasDataset(Dataset):
                 plot_one_box(bbox, img, color.tolist(), self.c2l[label])
         Image.fromarray(img).show()
         return
+
+
+def dataset_collate_fn(batch):
+    """
+    This function describes how DataLoader organize the batch data. E.g. if batch size is 5, DataLoader will fetch data
+    from the dataset 5 times and put them in a list, here we reorganize the batch data from
+    List[Tuple(canvas, bboxes, labels),...] to List[canvas] and List[dict{'boxes':bboxes, 'labels':labels},...]
+
+    :param batch: List[Tuple(canvas, bboxes, labels),...], this function is called by DataLoader only,
+                  image should has the shape of (H, W, C)
+    :return: List[canvas], List[dict{'boxes':bboxes, 'labels':labels},...]
+    """
+    data, target = [], []
+    for img, bbox, label in batch:
+        data.append(img.transpose(2, 0, 1))  # To shape (C, H, W)
+        target.append({'boxes': bbox,
+                       'labels': label})
+    return data, target

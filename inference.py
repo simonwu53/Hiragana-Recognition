@@ -202,12 +202,12 @@ def loss_batch(pred, gt, func, optimizer=None, mode='normal'):
         raise ValueError("Unknown model output? Need a method to compute loss...")
 
     if optimizer is not None:
+        # zero the parameter gradients
+        optimizer.zero_grad()
         # auto-calculate gradients
         loss.backward()
         # apply gradients
         optimizer.step()
-        # zero the parameter gradients
-        optimizer.zero_grad()
     return loss
 
 

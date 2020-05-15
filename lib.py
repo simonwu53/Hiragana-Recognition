@@ -152,7 +152,7 @@ def get_random_canvas(characters):
     for i in range(len(locs)):
         loc = locs[i]
         canvas[loc[1]:loc[3], loc[0]:loc[2]] = characters[i]
-    return canvas, locs
+    return canvas, np.array(locs, np.int64)
 
 
 def plot_one_box(x, img, color=None, label=None, line_thickness=None):

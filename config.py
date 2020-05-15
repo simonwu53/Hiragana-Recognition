@@ -13,11 +13,19 @@ STD_B = 0.1806
 LR = 1e-3  # learning rate
 L2 = 0.0  # L2 regularization
 
-# ---data loader---
-upSampling = 224
+# ---Dataset---
+upSampling = 50
 testSize = 0.15
 trainSize = None
-BS = 8  # batch size
+
+# ---Dataset(Canvas)---
+trainLen = 20000
+testLen = 3000
+maxCharacters = 10
+minCharacters = 3
+
+# ---DataLoader---
+BS = 2  # batch size
 SF = True  # shuffle
 dropLast = True
 numWorkers = 4
