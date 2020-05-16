@@ -10,7 +10,7 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 # ---modules---
-from dataset import TrainDataset
+from dataset.dataset import TrainDataset
 from net import SimpleModel
 # ---misc---
 from tqdm import tqdm

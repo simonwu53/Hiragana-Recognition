@@ -5,10 +5,11 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.ops import nms
 import numpy as np
 from PIL import Image
 # ---modules---
-from dataset_canvas import TrainCanvasDataset, dataset_collate_fn
+from dataset.dataset_canvas import TrainCanvasDataset, dataset_collate_fn
 # ---model---
 from net.fasterRCNN import fasterRCNN_ResNet50_fpn
 # ---misc---
@@ -127,7 +128,15 @@ def train(args):
                 if i == 0:
                     for k, image in enumerate(images):
                         writer.add_image('Train/Batch%d' % k, image, global_i)
-                writer.add_scalar('Train/Loss', loss_value, global_i)  # or optimizer, dropout info
+                rpn_objectness = loss_dict['loss_objectness'].item()
+                rpn_box_reg = loss_dict['loss_rpn_box_reg'].item()
+                roi_classifier = loss_dict['loss_classifier'].item()
+                roi_box_reg = loss_dict['loss_box_reg'].item()
+                writer.add_scalar('Train/Loss_sum', loss_value, global_i)
+                writer.add_scalar('Train/Loss_objectness', rpn_objectness, global_i)
+                writer.add_scalar('Train/Loss_rpn_box_reg', rpn_box_reg, global_i)
+                writer.add_scalar('Train/Loss_classifier', roi_classifier, global_i)
+                writer.add_scalar('Train/Loss_roi_box_reg', roi_box_reg, global_i)
                 writer.flush()
 
             # update global step
@@ -141,7 +150,7 @@ def train(args):
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             save_ckpt(model, optimizer, (epoch + 1), global_i,
-                      os.path.join(ckpt_dir, 'Epoch%d.tar' % (epoch + 1,)))
+                      os.path.join(ckpt_dir, 'Epoch%dLoss%.2f.tar' % (epoch + 1, best_loss)))
 
         # validation
         model.eval()  # switch model to validation mode
@@ -165,28 +174,29 @@ def train(args):
                     bboxes, labels, scores = pred_dict['boxes'], pred_dict['labels'], pred_dict['scores']
                     bboxes_gt, labels_gt = target['boxes'], target['labels']
 
+                    # appply nms for each class
+                    bboxes, scores, labels = apply_nms(bboxes, scores, labels, nmsIoU)
+
                     # convert data
                     bboxes = bboxes.detach().round().cpu().numpy().astype(np.int64)
                     labels = list(map(lambda l: dataset.c2l[l], labels.detach().cpu().numpy()))
                     scores = scores.detach().cpu().numpy()
 
-                    if i % 100 == 0:  # only visualize the first batch
-                        # add predicted bboxes to the image
-                        for k in range(bboxes.shape[0]):
-                            plot_one_box(bboxes[k], bg, color_predict, labels[k] + ': ' + str(np.round(scores[k]*100, 2)))
+                    # add predicted bboxes to the image
+                    for k in range(bboxes.shape[0]):
+                        plot_one_box(bboxes[k], bg, color_predict, labels[k] + ': ' + str(np.round(scores[k]*100, 2)))
 
-                        # add ground truth bboxes to the image
-                        for k in range(bboxes_gt.shape[0]):
-                            plot_one_box(bboxes_gt[k], bg, color_correct, dataset.c2l[labels_gt[k]])
+                    # add ground truth bboxes to the image
+                    for k in range(bboxes_gt.shape[0]):
+                        plot_one_box(bboxes_gt[k], bg, color_correct, dataset.c2l[labels_gt[k]])
 
-                        # collect plotted images
-                        interpreted_images.append(torch.from_numpy(bg.transpose(2,0,1)))
+                    # collect plotted images
+                    interpreted_images.append(torch.from_numpy(bg.transpose(2,0,1)))
 
                 # show batch in TensorBoard
-                if i == 0:
-                    for j, plotted_img in enumerate(interpreted_images):
-                        writer.add_image('Validation/Image%d' % j, plotted_img, global_i)
-                    writer.flush()
+                for j, plotted_img in enumerate(interpreted_images):
+                    writer.add_image('Validation/Results%d_%d' % (i, j), plotted_img, global_i)
+                writer.flush()
 
     # save the trained model
     save_ckpt(model, optimizer, trained_epoch+Epochs, global_i,
@@ -196,6 +206,32 @@ def train(args):
 
 def test(args):
     return
+
+
+def apply_nms(boxes, scores, labels, ths_IoU):
+    """
+    Apply non-maximum suppression on the boxes according to their intersection-over-union
+
+    :param boxes: Tensor, shape (N, 4), boxes to perform NMS on. They are expected to be in (x1, y1, x2, y2) format
+    :param scores: Tensor, shape (N,), scores for each one of the boxes
+    :param labels: Tensor, shape (N,), labels for each one of the boxes
+    :param ths_IoU: float, discards all overlapping boxes with IoU > iou_threshold
+    :return: filtered boxes, scores and labels
+    """
+    selected_bboxes, selected_labels, selected_scores = [], [], []
+    for l in labels.unique():
+        m = labels == l  # get label mask
+        b = boxes[m]  # get corresponding boxes
+        s = scores[m]  # get corresponding scores
+        ll = labels[m]  # get corresponding labels
+        res = nms(b, s, ths_IoU)  # indices that kept
+        selected_bboxes.append(b[res])
+        selected_labels.append(ll[res])
+        selected_scores.append(s[res])
+    boxes = torch.cat(selected_bboxes)
+    labels = torch.cat(selected_labels)
+    scores = torch.cat(selected_scores)
+    return boxes, scores, labels
 
 
 def select_model(args):

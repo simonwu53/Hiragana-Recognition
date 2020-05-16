@@ -19,8 +19,8 @@ testSize = 0.15
 trainSize = None
 
 # ---Dataset(Canvas)---
-trainLen = 20000
-testLen = 3000
+trainLen = 2000
+testLen = 20
 maxCharacters = 10
 minCharacters = 3
 
@@ -35,3 +35,4 @@ timeOut = 5
 # ---train details---
 Epochs = 30
 TBUpdate = 100  # tensorboard update interval
+nmsIoU = 0.3
