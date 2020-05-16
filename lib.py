@@ -155,7 +155,7 @@ def get_random_canvas(characters):
     return canvas, np.array(locs, np.int64)
 
 
-def plot_one_box(x, img, color=None, label=None, line_thickness=None):
+def plot_one_box(x, img, color=None, label=None, line_thickness=None, position='top'):
     """
     adds one bounding box and label to the image
 
@@ -165,6 +165,7 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
     :param color: List[int], A list of integers that are [R, G, B] values
     :param label: str, a string that will be put on the top of the bounding box
     :param line_thickness: int, an integer value indicates the bounding box's line width
+    :param position: str, choose from 'top', 'bottom', specifying the label position
     :return: None, the input image itself will be updated (in-place).
     """
     # Plots one bounding box on image img
@@ -175,6 +176,11 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
     if label:
         tf = max(tl - 1, 1)  # font thickness
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
-        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        if position == 'bottom':
+            box_h = c2[1]-c1[1]
+            c1 = c1[0], c1[1] + box_h + t_size[1] + 3
+            c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        else:
+            c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
         cv2.rectangle(img, c1, c2, color, -1)  # filled
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)

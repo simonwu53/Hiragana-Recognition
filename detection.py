@@ -71,6 +71,7 @@ def train(args):
         save_root = os.path.dirname(os.path.dirname(args.load))
         log_dir = os.path.join(save_root, 'log/')
         ckpt_dir = os.path.join(save_root, 'checkpoints/')
+        writer = SummaryWriter(log_dir=log_dir, purge_step=global_i, max_queue=10, flush_secs=120)
     else:
         trained_epoch = 0
         save_root = os.path.join('./results', datetime.now().strftime("%H%M_%d%m%Y"))
@@ -79,19 +80,16 @@ def train(args):
         os.mkdir(log_dir)
         ckpt_dir = os.path.join(save_root, 'checkpoints/')
         os.mkdir(ckpt_dir)
-
-    # save configuration to the training directory
-    shutil.copy2('./config.py', save_root)
-
-    # TensorBoard summary writer -- for training process visualization
-    writer = SummaryWriter(log_dir=log_dir, max_queue=10, flush_secs=120)
+        # save configuration to the training directory
+        shutil.copy2('./config.py', save_root)
+        # TensorBoard summary writer -- for training process visualization
+        writer = SummaryWriter(log_dir=log_dir, max_queue=10, flush_secs=120)
 
     # start training epoch
     for epoch in range(trained_epoch, trained_epoch+Epochs):
         model.train()  # switch model to training mode
         dataset.train()  # switch dataset to training mode
         running_loss = 0.0  # running loss for training set
-        epoch_loss = 0.0  # epoch final average loss
         print()
         LOG.warning('Start epoch %d.' % (epoch + 1))
 
@@ -188,7 +186,7 @@ def train(args):
 
                     # add ground truth bboxes to the image
                     for k in range(bboxes_gt.shape[0]):
-                        plot_one_box(bboxes_gt[k], bg, color_correct, dataset.c2l[labels_gt[k]])
+                        plot_one_box(bboxes_gt[k], bg, color_correct, dataset.c2l[labels_gt[k]], position='bottom')
 
                     # collect plotted images
                     interpreted_images.append(torch.from_numpy(bg.transpose(2,0,1)))
