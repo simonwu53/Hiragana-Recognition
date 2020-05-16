@@ -228,6 +228,8 @@ def apply_nms(boxes, scores, labels, ths_IoU):
         selected_bboxes.append(b[res])
         selected_labels.append(ll[res])
         selected_scores.append(s[res])
+    if len(selected_bboxes) == 0:
+        return boxes, scores, labels
     boxes = torch.cat(selected_bboxes)
     labels = torch.cat(selected_labels)
     scores = torch.cat(selected_scores)
