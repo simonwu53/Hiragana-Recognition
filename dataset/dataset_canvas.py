@@ -6,7 +6,8 @@ import logging
 import random
 from PIL import Image
 import cv2
-from lib import get_random_canvas, plot_one_box
+from lib import get_random_canvas
+from visualization import plot_one_box
 
 
 # Set logging
@@ -16,7 +17,7 @@ LOG = logging.getLogger('Dataset')
 
 
 class TrainCanvasDataset(Dataset):
-    def __init__(self, data_path='./data.npz', train_len=20000, test_len=3000, **kwargs):
+    def __init__(self, data_path='./dataset/data.npz', train_len=20000, test_len=3000, **kwargs):
         """
         This is the class for training dataset used by PyTorch DataLoader.
         Dataset depicts the logic of how to access each (image, label) pair.

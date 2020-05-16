@@ -19,7 +19,8 @@ from datetime import datetime
 import shutil
 import logging
 from config import *
-from lib import count_parameters, plot_one_box
+from lib import count_parameters
+from visualization import plot_one_box
 
 
 # Set logging

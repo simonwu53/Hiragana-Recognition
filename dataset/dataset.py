@@ -16,7 +16,7 @@ LOG = logging.getLogger('Dataset')
 
 
 class TrainDataset(Dataset):
-    def __init__(self, data_path='./data.npz', test_size=0.15, train_size=None, mode='train',
+    def __init__(self, data_path='./dataset/data.npz', test_size=0.15, train_size=None, mode='train',
                  color=False, normalize=True, img_size=50):
         """
         This is the class for training dataset used by PyTorch DataLoader.
