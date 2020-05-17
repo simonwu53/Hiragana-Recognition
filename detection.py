@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.ops import nms
 import numpy as np
 from PIL import Image
+import cv2
 # ---modules---
 from dataset.dataset_canvas import TrainCanvasDataset, dataset_collate_fn
 # ---model---
@@ -47,28 +48,17 @@ def train(args):
 
     # variables
     global_i = 0  # global steps counter
-    color_correct = [0, 255, 0]  # green
-    color_predict = [255, 0, 0]  # red
     best_loss = 10000
 
     # dataset and loader
-    if args.resnet50:
-        dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
-                                     min_characters=minCharacters, max_characters=maxCharacters,
-                                     color=True)
-    else:
-        dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
-                                     min_characters=minCharacters, max_characters=maxCharacters)
-
-    loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
-                        pin_memory=pinMem, drop_last=dropLast, timeout=timeOut, collate_fn=dataset_collate_fn)
+    dataset, loader = load_dataset(args)
     if len(loader) < 1:
         LOG.error('Dataset maybe empty.')
         raise ValueError('Dataset maybe empty.')
 
     # continue training check & prepare saving directory
     if args.load:
-        trained_epoch, global_i = load_ckpt(model, optimizer, args.load)
+        trained_epoch, global_i = load_ckpt(args.load, model, optimizer)
         save_root = os.path.dirname(os.path.dirname(args.load))
         log_dir = os.path.join(save_root, 'log/')
         ckpt_dir = os.path.join(save_root, 'checkpoints/')
@@ -165,36 +155,11 @@ def train(args):
                 pred = model(images_torch)
 
                 # interpret the predictions
-                # pred = List[dict_keys(['boxes', 'labels', 'scores']), ...]
-                interpreted_images = []
-                # iterating every image in the batch
-                for img, target, pred_dict in zip(images, targets, pred):
-                    bg = np.array(Image.fromarray((img * 255).transpose(1, 2, 0).astype(np.uint8)))  # To shape (H, W, C)
-                    bboxes, labels, scores = pred_dict['boxes'], pred_dict['labels'], pred_dict['scores']
-                    bboxes_gt, labels_gt = target['boxes'], target['labels']
-
-                    # appply nms for each class
-                    bboxes, scores, labels = apply_nms(bboxes, scores, labels, nmsIoU)
-
-                    # convert data
-                    bboxes = bboxes.detach().round().cpu().numpy().astype(np.int64)
-                    labels = list(map(lambda l: dataset.c2l[l], labels.detach().cpu().numpy()))
-                    scores = scores.detach().cpu().numpy()
-
-                    # add predicted bboxes to the image
-                    for k in range(bboxes.shape[0]):
-                        plot_one_box(bboxes[k], bg, color_predict, labels[k] + ': ' + str(np.round(scores[k]*100, 2)))
-
-                    # add ground truth bboxes to the image
-                    for k in range(bboxes_gt.shape[0]):
-                        plot_one_box(bboxes_gt[k], bg, color_correct, dataset.c2l[labels_gt[k]], position='bottom')
-
-                    # collect plotted images
-                    interpreted_images.append(torch.from_numpy(bg.transpose(2,0,1)))
+                interpreted_images = interpret_predictions(images, targets, pred, dataset.c2l)
 
                 # show batch in TensorBoard
                 for j, plotted_img in enumerate(interpreted_images):
-                    writer.add_image('Validation/Results%d_%d' % (i, j), plotted_img, global_i)
+                    writer.add_image('Validation/Results%d_%d' % (i, j), torch.from_numpy(plotted_img.transpose(2, 0, 1)), global_i)
                 writer.flush()
 
     # save the trained model
@@ -204,7 +169,108 @@ def train(args):
 
 
 def test(args):
+    """
+    Testing process main function
+
+    :param args: args from command line inputs
+    :return: -
+    """
+    # get CNN model
+    model = select_model(args)
+    model.cuda()
+
+    # dataset and loader
+    dataset, loader = load_dataset(args)
+
+    # testing mode
+    model.eval()
+    dataset.eval()
+
+    # load saved states
+    trained_epoch, global_i = load_ckpt(args.load, model)
+    save_root = os.path.dirname(os.path.dirname(args.load))
+    LOG.warning("Loaded saved state at: %s" % save_root)
+    LOG.warning("Trained epochs: %d" % trained_epoch)
+    LOG.warning("Global steps: %d" % global_i)
+
+    # create windows
+    for i in range(BS):
+        cv2.namedWindow('Prediction_%d' % i, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Prediction_%d' % i, 800, 800)
+
+    # start testing
+    pbar = tqdm(loader)
+    with torch.no_grad():
+        for i, data in enumerate(pbar):
+            images, targets = data
+            images_torch = [torch.from_numpy(image).float().cuda() for image in images]
+
+            # model inference
+            pred = model(images_torch)
+
+            # interpret the predictions
+            interpreted_images = interpret_predictions(images, targets, pred, dataset.c2l)
+
+            # show info
+            pbar.set_description("Click any key to show next prediction....")
+
+            for j in range(BS):
+                # convert to opencv bgr for plotting
+                res = cv2.cvtColor(interpreted_images[j], cv2.COLOR_RGB2BGR)
+                # show image
+                cv2.imshow('Prediction_%d' % j, res)
+
+            # wait for examination until next prediction
+            key = cv2.waitKey(0)
+            if key == ord('q') or key == 27:
+                break
+
+    LOG.warning("Exit. ")
     return
+
+
+def interpret_predictions(images, targets, predictions, c2l, color_predict=(255, 0, 0), color_correct=(0, 255, 0)):
+    """
+    plot model predictions and ground truth bounding boxes on the original image
+
+    :param images: List[ndarray], the output directly from the dataset's __getitem__, which is normalized to [0, 1],
+                                  list size is the batch size, which applies to all the following params.
+    :param targets: List[dict], the output directly from the dataset's __getitem__, which contains the keys: 'boxes',
+                                and 'labels'.
+    :param predictions: List[dict], the output directly from the model's inference, which contains the keys: 'boxes',
+                                    'labels', and 'scores'
+    :param c2l: dict, a dictionary convert class numbers to class labels
+    :param color_predict: Tuple[int,int,int], color for the predictions
+    :param color_correct: Tuple[int,int,int], color for the ground truths
+    :return: List[ndarray], interpreted images in ndarray
+    """
+    # pred = List[dict_keys(['boxes', 'labels', 'scores']), ...]
+    interpreted_images = []
+    # iterating every image in the batch
+    for img, target, pred_dict in zip(images, targets, predictions):
+        bg = np.array(Image.fromarray((img * 255).transpose(1, 2, 0).astype(np.uint8)))  # To shape (H, W, C)
+        bboxes, labels, scores = pred_dict['boxes'], pred_dict['labels'], pred_dict['scores']
+        bboxes_gt, labels_gt = target['boxes'], target['labels']
+
+        # appply nms for each class
+        bboxes, scores, labels = apply_nms(bboxes, scores, labels, nmsIoU)
+
+        # convert data
+        bboxes = bboxes.detach().round().cpu().numpy().astype(np.int64)
+        labels = list(map(lambda l: c2l[l], labels.detach().cpu().numpy()))
+        scores = scores.detach().cpu().numpy()
+
+        # add predicted bboxes to the image
+        for k in range(bboxes.shape[0]):
+            plot_one_box(bboxes[k], bg, color_predict, labels[k] + ': ' + str(np.round(scores[k] * 100, 2)))
+
+        # add ground truth bboxes to the image
+        for k in range(bboxes_gt.shape[0]):
+            plot_one_box(bboxes_gt[k], bg, color_correct, c2l[labels_gt[k]], position='bottom')
+
+        # collect plotted images
+        interpreted_images.append(bg)
+    return interpreted_images
 
 
 def apply_nms(boxes, scores, labels, ths_IoU):
@@ -239,7 +305,7 @@ def select_model(args):
     """
     return the corresponding model based on the command line args
     :param args: command line args
-    :return:
+    :return: pytorch model
     """
     # use the base vgg19 with batch normalization model
     if args.resnet50:
@@ -253,6 +319,26 @@ def select_model(args):
     elif args.simple:
         LOG.error("Customized model not implemented.")
         raise NotImplementedError("Customized model not implemented")
+
+
+def load_dataset(args):
+    """
+    loads dataset and data loader
+
+    :param args: command line args
+    :return: Train dataset, and pytorch data loader
+    """
+    if args.resnet50:
+        dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
+                                     min_characters=minCharacters, max_characters=maxCharacters,
+                                     color=True)
+    else:
+        dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
+                                     min_characters=minCharacters, max_characters=maxCharacters)
+
+    loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
+                        pin_memory=pinMem, drop_last=dropLast, timeout=timeOut, collate_fn=dataset_collate_fn)
+    return dataset, loader
 
 
 def save_ckpt(model, optimizer, epoch, global_step, path):
@@ -274,7 +360,7 @@ def save_ckpt(model, optimizer, epoch, global_step, path):
     return
 
 
-def load_ckpt(model, optimizer, path):
+def load_ckpt(path, model, optimizer=None):
     """
     Load a pre-trained model on GPU for training or evaluation
 
@@ -284,9 +370,10 @@ def load_ckpt(model, optimizer, path):
     """
     ckpt = torch.load(path)
     model.load_state_dict(ckpt['model_state_dict'])
-    optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-    epoch = ckpt['epoch']
     global_step = ckpt['global_step']
+    epoch = ckpt['epoch']
+    if optimizer is not None:
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
     return epoch, global_step
 
 
@@ -305,7 +392,6 @@ if __name__ == '__main__':
         train(opt)
     elif opt.test:
         test(opt)
-        raise NotImplementedError('testing mode is not implemented')
     else:
         LOG.warning("Please specify whether to train or test")
         raise ValueError("Please specify whether to train or test using --train or --test")
