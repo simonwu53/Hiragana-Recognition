@@ -27,7 +27,7 @@ from visualization import plot_one_box
 # Set logging
 FORMAT = '[%(asctime)s [%(name)s][%(levelname)s]: %(message)s'
 logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
-LOG = logging.getLogger('Train')
+LOG = logging.getLogger('Detection')
 
 
 def train(args):
@@ -180,7 +180,7 @@ def test(args):
     model.cuda()
 
     # dataset and loader
-    dataset, loader = load_dataset(args)
+    dataset, loader = load_dataset(args, batch_size=1)
 
     # testing mode
     model.eval()
@@ -199,6 +199,7 @@ def test(args):
         cv2.resizeWindow('Prediction_%d' % i, 800, 800)
 
     # start testing
+    LOG.warning("Click any key to show next prediction....")
     pbar = tqdm(loader)
     with torch.no_grad():
         for i, data in enumerate(pbar):
@@ -212,9 +213,9 @@ def test(args):
             interpreted_images = interpret_predictions(images, targets, pred, dataset.c2l)
 
             # show info
-            pbar.set_description("Click any key to show next prediction....")
+            pbar.set_description("Num objects: %d" % pred[0]['boxes'].shape[0])
 
-            for j in range(BS):
+            for j in range(1):
                 # convert to opencv bgr for plotting
                 res = cv2.cvtColor(interpreted_images[j], cv2.COLOR_RGB2BGR)
                 # show image
@@ -321,13 +322,14 @@ def select_model(args):
         raise NotImplementedError("Customized model not implemented")
 
 
-def load_dataset(args):
+def load_dataset(args, batch_size=None):
     """
     loads dataset and data loader
 
     :param args: command line args
     :return: Train dataset, and pytorch data loader
     """
+    batch_size = BS if batch_size is None else batch_size
     if args.resnet50:
         dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
                                      min_characters=minCharacters, max_characters=maxCharacters,
@@ -336,7 +338,7 @@ def load_dataset(args):
         dataset = TrainCanvasDataset(data_path=args.dataset, train_len=trainLen, test_len=testLen,
                                      min_characters=minCharacters, max_characters=maxCharacters)
 
-    loader = DataLoader(dataset, batch_size=BS, shuffle=SF, num_workers=numWorkers,
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=SF, num_workers=numWorkers,
                         pin_memory=pinMem, drop_last=dropLast, timeout=timeOut, collate_fn=dataset_collate_fn)
     return dataset, loader
 

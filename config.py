@@ -9,6 +9,15 @@ STD_R = 0.1806
 STD_G = 0.1806
 STD_B = 0.1806
 
+MEAN2 = 0.0099
+STD2 = 0.0653
+MEAN_R2 = 0.0099
+MEAN_G2 = 0.0099
+MEAN_B2 = 0.0099
+STD_R2 = 0.0653
+STD_G2 = 0.0653
+STD_B2 = 0.0653
+
 # ---optimizer---
 LR = 1e-3  # learning rate
 L2 = 0.0  # L2 regularization

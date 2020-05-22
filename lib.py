@@ -104,6 +104,100 @@ def train_dataset_statistics(dataset, img_shape=(50, 50, 1)):
         return (mean_r, mean_g, mean_b), (std_r, std_g, std_b)
 
 
+def train_dataset_statistics2(dataset, channel=3, collate_fn=None):
+    """
+    Calculate the training data set statistics (mean and std.) for dynamic-sized inputs
+
+    :param dataset: dataset instance, if channels==3, dataset must can provide 3-channel images
+    :param channel: int, input chananels
+    :param collate_fn: func, collate function for the data loader
+    :return: (mean, std.) values
+    """
+    assert channel in (1, 3), "Only 1 or 3 are valid input channels."
+    C = channel
+
+    dataset.train()  # set to training mode
+    # create data loader
+    loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0,
+                                         pin_memory=True, drop_last=False, collate_fn=collate_fn)
+
+    # number of pixels of total frames per channel
+    n_pixels_total = 0
+    if C == 1:
+        x_sum = torch.tensor(0, dtype=torch.float32, device='cuda',
+                             requires_grad=False)  # cam depth sum of x
+        # cam depth sum of x^2
+        x2_sum = torch.tensor(0, dtype=torch.float32,
+                              device='cuda', requires_grad=False)
+
+    elif C == 3:
+        x_sum_r = torch.tensor(0, dtype=torch.float32,
+                               device='cuda', requires_grad=False)
+        x_sum_g = torch.tensor(0, dtype=torch.float32,
+                               device='cuda', requires_grad=False)
+        x_sum_b = torch.tensor(0, dtype=torch.float32,
+                               device='cuda', requires_grad=False)
+        x2_sum_r = torch.tensor(0, dtype=torch.float32,
+                                device='cuda', requires_grad=False)
+        x2_sum_g = torch.tensor(0, dtype=torch.float32,
+                                device='cuda', requires_grad=False)
+        x2_sum_b = torch.tensor(0, dtype=torch.float32,
+                                device='cuda', requires_grad=False)
+
+    else:
+        LOG.error('Invalid channels number.')
+        raise ValueError('Invalid channels number.')
+
+    # iterating over dataset
+    with torch.no_grad():
+        for i, data in enumerate(tqdm(loader)):
+            # unpack data
+            images, targets = data
+            image = [torch.from_numpy(image).float().cuda() for image in images][0]
+
+            # track the sum of x and the sum of x^2
+            if C == 1:
+                x_sum += torch.sum(image[0])
+                x2_sum += torch.sum(image[0] ** 2)
+            else:
+                x_sum_r += torch.sum(image[0])
+                x_sum_g += torch.sum(image[1])
+                x_sum_b += torch.sum(image[2])
+                x2_sum_r += torch.sum(image[0] ** 2)
+                x2_sum_g += torch.sum(image[1] ** 2)
+                x2_sum_b += torch.sum(image[2] ** 2)
+
+            n_pixels_total += np.prod(image[0].shape)  # total num pixels per channel
+
+    # calculate mean and std.
+    # formula: stddev = sqrt((SUM[x^2] - SUM[x]^2 / n) / (n-1))
+    if C == 1:
+        mean = x_sum / n_pixels_total
+        std = torch.sqrt((x2_sum - x_sum ** 2 / n_pixels_total) / (n_pixels_total - 1))
+        print('Training data Statistics: ')
+        print('Mean: %.4f' % mean.cpu().item())
+        print('STD: %.4f' % std.cpu().item())
+        return mean, std  # calculated results: mean=23.8014, std=45.9789
+    else:
+        mean_r = x_sum_r / n_pixels_total
+        mean_g = x_sum_g / n_pixels_total
+        mean_b = x_sum_b / n_pixels_total
+        std_r = torch.sqrt(
+            (x2_sum_r - x_sum_r ** 2 / n_pixels_total) / (n_pixels_total - 1))
+        std_g = torch.sqrt(
+            (x2_sum_g - x_sum_g ** 2 / n_pixels_total) / (n_pixels_total - 1))
+        std_b = torch.sqrt(
+            (x2_sum_b - x_sum_b ** 2 / n_pixels_total) / (n_pixels_total - 1))
+        print('Training data Statistics: ')
+        print('R channel Mean: %.4f' % mean_r.cpu().item())
+        print('G channel Mean: %.4f' % mean_g.cpu().item())
+        print('B channel Mean: %.4f' % mean_b.cpu().item())
+        print('R channel STD: %.4f' % std_r.cpu().item())
+        print('G channel STD: %.4f' % std_g.cpu().item())
+        print('B channel STD: %.4f' % std_b.cpu().item())
+        return (mean_r, mean_g, mean_b), (std_r, std_g, std_b)
+
+
 def sample_images(images, labels, n_samples=500):
     assert images.shape[0] > n_samples, 'Sample quantity must be smaller than the quantity of the dataset.'
     assert n_samples > 100, 'Too less samples.'

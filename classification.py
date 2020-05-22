@@ -25,7 +25,7 @@ from lib import sample_images, count_parameters
 # Set logging
 FORMAT = '[%(asctime)s [%(name)s][%(levelname)s]: %(message)s'
 logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
-LOG = logging.getLogger('Train')
+LOG = logging.getLogger('Classification')
 
 
 def train(args):
