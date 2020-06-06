@@ -65,8 +65,8 @@ Please refer to the "requirements.txt" file in the project folder.
 
 | Training Accuracy | Training Loss|
 | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/simonwu53/Hiragana-Recognition/master/results/comparison/Train_Accuracy.svg?token=AGQWTMQTDBJFE3UU2WMAV526XRKCC" width="350" alt="Train_Accuracy"> | <img src="https://raw.githubusercontent.com/simonwu53/Hiragana-Recognition/master/results/comparison/Train_Loss.svg?token=AGQWTMWACYWFYZBAOGFSEE26XRKH2" width="350" alt="Train_Loss"> |
+| <img src="results/comparison/Train_Accuracy.svg" width="350" alt="Train_Accuracy"> | <img src="results/comparison/Train_Loss.svg" width="350" alt="Train_Loss"> |
 
 | Validation Accuracy | Validation Loss|
 | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/simonwu53/Hiragana-Recognition/master/results/comparison/Validation_Accuracy.svg?token=AGQWTMQ34BKQIEAQ67RKC7S6XRKK4" width="350" alt="Validation_Accuracy"> | <img src="https://raw.githubusercontent.com/simonwu53/Hiragana-Recognition/master/results/comparison/Validation_Loss.svg?token=AGQWTMV43ZVFBHKZUCFKKGS6XRKMM" width="350" alt="Validation_Loss">|
+| <img src="results/comparison/Validation_Accuracy.svg" width="350" alt="Validation_Accuracy"> | <img src="results/comparison/Validation_Loss.svg" width="350" alt="Validation_Loss">|
