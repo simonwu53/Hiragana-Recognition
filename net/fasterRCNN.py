@@ -14,7 +14,7 @@ LOG = logging.getLogger('Dataset')
 def fasterRCNN_ResNet50_fpn(num_classes=72,
                             anchor_sizes=((32,), (64,), (128,), (256,), (512,)),
                             aspect_ratios=((0.5, 1.0, 2.0),)*5,
-                            image_mean=None, image_std=None):
+                            image_mean=None, image_std=None, min_size=200, max_size=600):
     """
     Generate a Faster R-CNN with ResNet50 backbone
 
@@ -41,7 +41,9 @@ def fasterRCNN_ResNet50_fpn(num_classes=72,
         raise ValueError("The length of anchor_sizes and the aspect_ratios must be 5!")
     args = {'rpn_anchor_generator': AnchorGenerator(sizes=anchor_sizes, aspect_ratios=aspect_ratios),
             'image_mean': image_mean,
-            'image_std': image_std}
+            'image_std': image_std,
+            'min_size': min_size,
+            'max_size': max_size}
 
     model = fasterrcnn_resnet50_fpn(pretrained=False, num_classes=num_classes, pretrained_backbone=False, **args)
     return model

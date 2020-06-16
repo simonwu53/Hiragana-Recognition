@@ -312,7 +312,7 @@ def select_model(args):
     if args.resnet50:
         LOG.warning('Loading Faster R-CNN with ResNet50 backbone...')
         LOG.warning('It may take few minutes to load the PyTorch model...please wait patiently...')
-        model = fasterRCNN_ResNet50_fpn()
+        model = fasterRCNN_ResNet50_fpn(image_mean=(MEAN_R2, MEAN_G2, MEAN_B2), image_std=(STD_R2, STD_G2, STD_B2))
         LOG.warning('Trainable parameters: %d' % count_parameters(model))
         return model
 
